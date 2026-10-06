@@ -152,7 +152,7 @@ export function FoodLogger({
         </CardContent>
       </Card>
 
-      <form onSubmit={search} className="flex gap-2">
+      <form method="post" onSubmit={search} className="flex gap-2">
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}

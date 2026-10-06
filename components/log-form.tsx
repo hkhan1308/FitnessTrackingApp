@@ -156,7 +156,7 @@ function Field({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const id = label.toLowerCase().replace(/[^a-z]+/g, "-");
+  const id = label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>

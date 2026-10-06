@@ -43,7 +43,7 @@ export default function LoginPage() {
       <p className="mt-2 text-sm text-muted-foreground">
         Enter the passcode to open weight, meals, and history.
       </p>
-      <form onSubmit={submit} className="mt-8 space-y-3">
+      <form method="post" onSubmit={submit} className="mt-8 space-y-3">
         <Label htmlFor="passcode">Passcode</Label>
         <Input
           id="passcode"

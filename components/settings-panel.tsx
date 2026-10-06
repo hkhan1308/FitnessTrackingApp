@@ -10,13 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 function text(value: number | null): string {
   return value == null ? "" : String(value);
@@ -102,17 +95,17 @@ export function SettingsPanel({ profile }: { profile: Profile }) {
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3">
           <div className="col-span-2 space-y-1.5">
-            <Label>Sex</Label>
-            <Select value={sex} onValueChange={(value) => setSex(value ?? "unset")}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue placeholder="Not set" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unset">Not set</SelectItem>
-                <SelectItem value="male">Male</SelectItem>
-                <SelectItem value="female">Female</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="sex">Sex</Label>
+            <select
+              id="sex"
+              value={sex}
+              onChange={(event) => setSex(event.target.value)}
+              className="h-11 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              <option value="unset">Not set</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
           </div>
           <NumberField label="Height (in)" value={height} onChange={setHeight} />
           <NumberField label="Current weight (lb)" value={currentWeight} onChange={setCurrentWeight} />
@@ -189,7 +182,7 @@ function NumberField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const id = label.toLowerCase().replace(/[^a-z]+/g, "-");
+  const id = label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
