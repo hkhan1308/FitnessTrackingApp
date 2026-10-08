@@ -14,8 +14,11 @@ import {
 import { rankFoods } from "@/lib/food-match";
 import { macrosForGrams, resolvePortion } from "@/lib/food-portion";
 import { parseFoodQuery } from "@/lib/food-parse";
+import { parseMeal, type MealSlot } from "@/lib/meals";
 import { rollingAverages } from "@/lib/moving-average";
+import { isActivity, type ActivityLevel } from "@/lib/targets";
 import { num } from "@/lib/format";
+import type { UnitSystem } from "@/lib/units";
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS app_meta (
@@ -85,15 +88,19 @@ const SCHEMA = [
 
 export type Profile = {
   sex: Sex | null;
+  units: UnitSystem;
   currentWeightLbs: number | null;
+  startingWeightLbs: number | null;
   goalWeightLbs: number | null;
   startingBodyFat: number | null;
+  currentBodyFat: number | null;
   goalBodyFat: number | null;
   heightInches: number | null;
   calorieGoal: number | null;
   proteinGoal: number | null;
   carbGoal: number | null;
   fatGoal: number | null;
+  activity: ActivityLevel;
 };
 
 export type Metric = {
@@ -121,6 +128,7 @@ export type FoodLogItem = {
   fat: number | null;
   source: string;
   foodId: string | null;
+  meal: MealSlot | null;
   createdAt: string;
 };
 
@@ -207,6 +215,11 @@ async function migrate() {
     sql: "SELECT value FROM app_meta WHERE key = 'seed_version'",
     args: [],
   });
+  await ensureColumn("profile", "units", "TEXT");
+  await ensureColumn("profile", "starting_weight_lbs", "REAL");
+  await ensureColumn("profile", "current_body_fat", "REAL");
+  await ensureColumn("profile", "activity", "TEXT");
+  await ensureColumn("food_log", "meal", "TEXT");
   if (String(seeded.rows[0]?.value ?? "") === "1") return;
   const now = new Date().toISOString();
   await client.batch(
@@ -246,18 +259,30 @@ async function migrate() {
   });
 }
 
+async function ensureColumn(table: string, column: string, definition: string) {
+  const info = await db().execute(`PRAGMA table_info(${table})`);
+  const exists = info.rows.some((row) => String(row.name) === column);
+  if (!exists) {
+    await db().execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 function mapProfile(row: Record<string, unknown> | undefined): Profile {
   return {
     sex: row?.sex === "male" || row?.sex === "female" ? row.sex : null,
+    units: row?.units === "metric" ? "metric" : "us",
     currentWeightLbs: asNumber(row?.current_weight_lbs),
+    startingWeightLbs: asNumber(row?.starting_weight_lbs),
     goalWeightLbs: asNumber(row?.goal_weight_lbs),
     startingBodyFat: asNumber(row?.starting_body_fat),
+    currentBodyFat: asNumber(row?.current_body_fat),
     goalBodyFat: asNumber(row?.goal_body_fat),
     heightInches: asNumber(row?.height_inches),
     calorieGoal: asNumber(row?.calorie_goal),
     proteinGoal: asNumber(row?.protein_goal),
     carbGoal: asNumber(row?.carb_goal),
     fatGoal: asNumber(row?.fat_goal),
+    activity: isActivity(row?.activity) ? row.activity : "light",
   };
 }
 
@@ -273,8 +298,9 @@ export async function saveProfile(input: Profile): Promise<Profile> {
   await db().execute({
     sql: `INSERT INTO profile (
       id, sex, current_weight_lbs, goal_weight_lbs, starting_body_fat, goal_body_fat,
-      height_inches, calorie_goal, protein_goal, carb_goal, fat_goal, updated_at
-    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      height_inches, calorie_goal, protein_goal, carb_goal, fat_goal, updated_at,
+      units, starting_weight_lbs, current_body_fat, activity
+    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       sex = excluded.sex,
       current_weight_lbs = excluded.current_weight_lbs,
@@ -286,7 +312,11 @@ export async function saveProfile(input: Profile): Promise<Profile> {
       protein_goal = excluded.protein_goal,
       carb_goal = excluded.carb_goal,
       fat_goal = excluded.fat_goal,
-      updated_at = excluded.updated_at`,
+      updated_at = excluded.updated_at,
+      units = excluded.units,
+      starting_weight_lbs = excluded.starting_weight_lbs,
+      current_body_fat = excluded.current_body_fat,
+      activity = excluded.activity`,
     args: [
       sex,
       input.currentWeightLbs,
@@ -299,6 +329,10 @@ export async function saveProfile(input: Profile): Promise<Profile> {
       input.carbGoal,
       input.fatGoal,
       new Date().toISOString(),
+      input.units === "metric" ? "metric" : "us",
+      input.startingWeightLbs,
+      input.currentBodyFat,
+      isActivity(input.activity) ? input.activity : "light",
     ],
   });
   await recomputeBodyFat({ ...input, sex });
@@ -517,6 +551,7 @@ function mapLog(row: Record<string, unknown>): FoodLogItem {
     fat: asNumber(row.fat),
     source: String(row.source),
     foodId: asText(row.food_id),
+    meal: parseMeal(row.meal),
     createdAt: String(row.created_at),
   };
 }
@@ -569,8 +604,8 @@ export async function addFoodLog(input: Omit<FoodLogItem, "id" | "createdAt">): 
   const createdAt = new Date().toISOString();
   await db().execute({
     sql: `INSERT INTO food_log (
-      id, date, name, quantity, unit, grams, calories, protein, carbs, fat, source, food_id, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, date, name, quantity, unit, grams, calories, protein, carbs, fat, source, food_id, created_at, meal
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.date,
@@ -585,6 +620,7 @@ export async function addFoodLog(input: Omit<FoodLogItem, "id" | "createdAt">): 
       input.source,
       input.foodId,
       createdAt,
+      parseMeal(input.meal),
     ],
   });
   return { ...input, id, name: input.name.trim(), createdAt };
@@ -592,12 +628,22 @@ export async function addFoodLog(input: Omit<FoodLogItem, "id" | "createdAt">): 
 
 export async function updateFoodLog(
   id: string,
-  input: Pick<FoodLogItem, "name" | "quantity" | "unit" | "calories" | "protein" | "carbs" | "fat">,
+  input: Pick<FoodLogItem, "name" | "quantity" | "unit" | "calories" | "protein" | "carbs" | "fat" | "meal">,
 ): Promise<void> {
   await ready();
   await db().execute({
-    sql: `UPDATE food_log SET name = ?, quantity = ?, unit = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?`,
-    args: [input.name.trim(), input.quantity, input.unit, input.calories, input.protein, input.carbs, input.fat, id],
+    sql: `UPDATE food_log SET name = ?, quantity = ?, unit = ?, calories = ?, protein = ?, carbs = ?, fat = ?, meal = ? WHERE id = ?`,
+    args: [
+      input.name.trim(),
+      input.quantity,
+      input.unit,
+      input.calories,
+      input.protein,
+      input.carbs,
+      input.fat,
+      parseMeal(input.meal),
+      id,
+    ],
   });
 }
 
@@ -746,8 +792,9 @@ export async function importData(payload: unknown) {
     statements.push({
       sql: `INSERT INTO profile (
         id, sex, current_weight_lbs, goal_weight_lbs, starting_body_fat, goal_body_fat,
-        height_inches, calorie_goal, protein_goal, carb_goal, fat_goal, updated_at
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        height_inches, calorie_goal, protein_goal, carb_goal, fat_goal, updated_at,
+        units, starting_weight_lbs, current_body_fat, activity
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         profile.sex === "male" || profile.sex === "female" ? profile.sex : null,
         num(profile.currentWeightLbs),
@@ -760,6 +807,10 @@ export async function importData(payload: unknown) {
         num(profile.carbGoal),
         num(profile.fatGoal),
         new Date().toISOString(),
+        profile.units === "metric" ? "metric" : "us",
+        num(profile.startingWeightLbs),
+        num(profile.currentBodyFat),
+        isActivity(profile.activity) ? profile.activity : "light",
       ],
     });
   }
@@ -807,8 +858,8 @@ export async function importData(payload: unknown) {
     if (!item?.date || !isISODate(item.date) || !item.name) continue;
     statements.push({
       sql: `INSERT INTO food_log (
-        id, date, name, quantity, unit, grams, calories, protein, carbs, fat, source, food_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, date, name, quantity, unit, grams, calories, protein, carbs, fat, source, food_id, created_at, meal
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         item.id || crypto.randomUUID(),
         item.date,
@@ -823,6 +874,7 @@ export async function importData(payload: unknown) {
         item.source || "import",
         item.foodId,
         item.createdAt || new Date().toISOString(),
+        parseMeal(item.meal),
       ],
     });
   }

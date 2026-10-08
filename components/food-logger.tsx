@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api } from "@/lib/client";
 import { fmt, fmtInt, fmtQty } from "@/lib/format";
+import { MEAL_SLOTS, type MealSlot } from "@/lib/meals";
 import type { FoodLogItem, MacroTotals, Profile } from "@/lib/store";
 import { MacroBars } from "@/components/macro-bars";
 import { Button } from "@/components/ui/button";
@@ -61,14 +62,22 @@ export function FoodLogger({
   yesterday: FoodLogItem[];
 }) {
   const router = useRouter();
+  const [meal, setMeal] = useState<MealSlot | null>(null);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [manual, setManual] = useState(false);
   const [editing, setEditing] = useState<FoodLogItem | null>(null);
 
+  function requireMeal(): MealSlot | null {
+    if (meal) return meal;
+    toast.error("Choose breakfast, lunch, dinner, or a snack first.");
+    return null;
+  }
+
   async function search(event?: React.FormEvent) {
     event?.preventDefault();
+    if (!requireMeal()) return;
     if (!query.trim()) return;
     setSearching(true);
     setManual(false);
@@ -87,6 +96,7 @@ export function FoodLogger({
   }
 
   async function addMatch(match: Match, saveToLibrary: boolean) {
+    if (!requireMeal()) return;
     try {
       await api("/api/food-log", {
         method: "POST",
@@ -102,6 +112,7 @@ export function FoodLogger({
           fat: match.fat,
           source: match.source,
           foodId: match.foodId,
+          meal,
           saveToLibrary,
           caloriesPer100g: match.caloriesPer100g,
           proteinPer100g: match.proteinPer100g,
@@ -120,10 +131,11 @@ export function FoodLogger({
   }
 
   async function copyMeal(id: string) {
+    if (!requireMeal()) return;
     try {
       await api("/api/food-log/copy", {
         method: "POST",
-        body: JSON.stringify({ id, date }),
+        body: JSON.stringify({ id, date, meal }),
       });
       toast.success("Meal logged.");
       router.refresh();
@@ -152,6 +164,19 @@ export function FoodLogger({
         </CardContent>
       </Card>
 
+      <div className="grid grid-cols-2 gap-2">
+        {MEAL_SLOTS.map((slot) => (
+          <Button
+            key={slot.id}
+            type="button"
+            variant={meal === slot.id ? "default" : "outline"}
+            className="h-11"
+            onClick={() => setMeal(slot.id)}
+          >
+            {slot.id === "snack" ? "Snack" : slot.label}
+          </Button>
+        ))}
+      </div>
       <form method="post" onSubmit={search} className="flex gap-2">
         <Input
           value={query}
@@ -225,6 +250,7 @@ export function FoodLogger({
       {manual ? (
         <ManualForm
           date={date}
+          meal={meal}
           initialName={result?.parsed.name || query}
           onDone={() => {
             setManual(false);
@@ -235,28 +261,25 @@ export function FoodLogger({
         />
       ) : null}
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium">Logged</h2>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing logged for this day yet.</p>
-        ) : (
-          items.map((item) => (
-            <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl bg-card px-3 py-3 ring-1 ring-foreground/10">
-              <button type="button" className="min-w-0 text-left" onClick={() => setEditing(item)}>
-                <p className="truncate font-medium">{item.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {item.quantity != null ? `${fmtQty(item.quantity)} ${item.unit ?? ""}` : "—"} · {labelFor(item.source)}
-                </p>
-              </button>
-              <div className="text-right">
-                <p className="text-sm tabular-nums">{fmtInt(item.calories)} kcal</p>
-                <button type="button" className="text-xs text-muted-foreground" onClick={() => remove(item.id)}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+      <section className="space-y-4">
+        {MEAL_SLOTS.map((slot) => (
+          <MealSection
+            key={slot.id}
+            title={slot.label}
+            items={items.filter((item) => item.meal === slot.id)}
+            onEdit={setEditing}
+            onRemove={remove}
+          />
+        ))}
+        {items.some((item) => item.meal == null) ? (
+          <MealSection
+            title="Earlier entries"
+            hint="Logged before meals were tracked."
+            items={items.filter((item) => item.meal == null)}
+            onEdit={setEditing}
+            onRemove={remove}
+          />
+        ) : null}
       </section>
 
       {yesterday.length > 0 ? (
@@ -281,6 +304,47 @@ export function FoodLogger({
   );
 }
 
+function MealSection({
+  title,
+  hint,
+  items,
+  onEdit,
+  onRemove,
+}: {
+  title: string;
+  hint?: string;
+  items: FoodLogItem[];
+  onEdit: (item: FoodLogItem) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-medium">{title}</h2>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing in this meal yet.</p>
+      ) : (
+        items.map((item) => (
+          <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl bg-card px-3 py-3 ring-1 ring-foreground/10">
+            <button type="button" className="min-w-0 text-left" onClick={() => onEdit(item)}>
+              <p className="truncate font-medium">{item.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {item.quantity != null ? `${fmtQty(item.quantity)} ${item.unit ?? ""}` : "—"} · {labelFor(item.source)}
+              </p>
+            </button>
+            <div className="text-right">
+              <p className="text-sm tabular-nums">{fmtInt(item.calories)} kcal</p>
+              <button type="button" className="text-xs text-muted-foreground" onClick={() => onRemove(item.id)}>
+                Delete
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 function labelFor(source: string): string {
   if (source === "local" || source === "seed") return "Local";
   if (source === "manual") return "Manual";
@@ -291,10 +355,12 @@ function labelFor(source: string): string {
 
 function ManualForm({
   date,
+  meal,
   initialName,
   onDone,
 }: {
   date: string;
+  meal: MealSlot | null;
   initialName: string;
   onDone: () => void;
 }) {
@@ -308,6 +374,10 @@ function ManualForm({
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
+    if (!meal) {
+      toast.error("Choose breakfast, lunch, dinner, or a snack first.");
+      return;
+    }
     setSaving(true);
     try {
       const meal = {
@@ -326,6 +396,7 @@ function ManualForm({
           grams: null,
           ...meal,
           source: "manual",
+          meal,
           saveToLibrary: remember,
           caloriesPer100g: meal.calories,
           proteinPer100g: meal.protein,
@@ -419,6 +490,7 @@ function EditForm({
   const [protein, setProtein] = useState(item.protein == null ? "" : String(item.protein));
   const [carbs, setCarbs] = useState(item.carbs == null ? "" : String(item.carbs));
   const [fat, setFat] = useState(item.fat == null ? "" : String(item.fat));
+  const [meal, setMeal] = useState<MealSlot | "">(item.meal ?? "");
 
   async function save() {
     try {
@@ -432,6 +504,7 @@ function EditForm({
           protein: Number(protein),
           carbs: Number(carbs),
           fat: Number(fat),
+          meal: meal || null,
         }),
       });
       toast.success("Meal updated.");
@@ -449,6 +522,17 @@ function EditForm({
       </DialogHeader>
       <div className="grid gap-3">
         <Input value={name} onChange={(event) => setName(event.target.value)} className="h-11" />
+        <select
+          aria-label="Meal"
+          value={meal}
+          onChange={(event) => setMeal(event.target.value as MealSlot | "")}
+          className="h-11 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+        >
+          <option value="">Earlier entry</option>
+          {MEAL_SLOTS.map((slot) => (
+            <option key={slot.id} value={slot.id}>{slot.id === "snack" ? "Snack" : slot.label}</option>
+          ))}
+        </select>
         <div className="grid grid-cols-2 gap-2">
           <Input inputMode="decimal" value={calories} onChange={(event) => setCalories(event.target.value)} placeholder="Calories" className="h-11" />
           <Input inputMode="decimal" value={protein} onChange={(event) => setProtein(event.target.value)} placeholder="Protein" className="h-11" />

@@ -49,6 +49,11 @@ export async function GET(request: Request) {
       "fat_goal",
       "source",
       "notes",
+      "meal",
+      "units",
+      "starting_weight_lbs",
+      "current_body_fat",
+      "activity",
     ]),
     row([
       "profile",
@@ -78,6 +83,11 @@ export async function GET(request: Request) {
       data.profile.fatGoal,
       "",
       "",
+      "",
+      data.profile.units,
+      data.profile.startingWeightLbs,
+      data.profile.currentBodyFat,
+      data.profile.activity,
     ]),
   ];
 
@@ -111,6 +121,11 @@ export async function GET(request: Request) {
         "",
         "",
         metric.notes,
+        "",
+        "",
+        "",
+        "",
+        "",
       ]),
     );
   }
@@ -144,6 +159,11 @@ export async function GET(request: Request) {
         "",
         "",
         item.source,
+        "",
+        item.meal ?? "",
+        "",
+        "",
+        "",
         "",
       ]),
     );
@@ -179,6 +199,11 @@ export async function GET(request: Request) {
         "",
         food.source,
         food.category,
+        "",
+        "",
+        "",
+        "",
+        "",
       ]),
     );
   }

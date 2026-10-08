@@ -7,6 +7,9 @@ import { parseFoodQuery } from "./food-parse.ts";
 import { macrosForGrams, resolvePortion } from "./food-portion.ts";
 import { goalProgress, remainingLabel } from "./goals.ts";
 import { rollingAverages } from "./moving-average.ts";
+import { calculateTargets, goalBodyFatPercent, macroGoalScore } from "./targets.ts";
+import { fromDisplayLength, fromDisplayWeight, round1, toDisplayLength, toDisplayWeight } from "./units.ts";
+import { parseMeal } from "./meals.ts";
 
 test("week starts Monday and ends Sunday", () => {
   assert.equal(startOfWeek("2026-10-06"), "2026-10-05");
@@ -65,6 +68,63 @@ test("goal remaining works for loss and gain", () => {
   const gain = goalProgress(150, 160, 170);
   assert.equal(gain?.percent, 50);
   assert.equal(remainingLabel(-4.2, "lb"), "4.2 lb to go");
+});
+
+test("unit switch keeps a stored pound value readable", () => {
+  const stored = 188.4;
+  const shown = round1(toDisplayWeight(stored, "metric") ?? 0);
+  const back = fromDisplayWeight(shown, "metric");
+  assert.ok(back != null && Math.abs(back - stored) < 0.15);
+  assert.equal(fromDisplayWeight(180, "us"), 180);
+  const waist = fromDisplayLength(round1(toDisplayLength(36, "metric") ?? 0), "metric");
+  assert.ok(waist != null && Math.abs(waist - 36) < 0.05);
+});
+
+test("goal body fat holds lean mass for loss and gain", () => {
+  const loss = goalBodyFatPercent(180, 20, 165);
+  assert.equal(loss, 12.7);
+  const gain = goalBodyFatPercent(180, 20, 200);
+  assert.equal(gain, 28);
+  assert.equal(goalBodyFatPercent(180, 20, 140), null);
+});
+
+test("calorie targets use lean mass, a modest adjustment, and the macro split", () => {
+  const loss = calculateTargets({
+    currentWeightLbs: 180,
+    currentBodyFat: 20,
+    goalWeightLbs: 165,
+    activity: "light",
+  });
+  assert.ok(loss);
+  assert.equal(loss?.goalBodyFat, 12.7);
+  assert.ok((loss?.calories ?? 0) < (loss?.tdee ?? 0));
+  assert.ok((loss?.calories ?? 0) >= (loss?.bmr ?? 0));
+  assert.equal(loss?.protein, Math.round((165 / 2.2046226218) * 1.8));
+  const proteinKcal = (loss?.protein ?? 0) * 4;
+  const fatKcal = (loss?.fat ?? 0) * 9;
+  const carbKcal = (loss?.carbs ?? 0) * 4;
+  assert.ok(Math.abs(fatKcal / (loss?.calories ?? 1) - 0.275) < 0.05);
+  assert.ok(Math.abs(proteinKcal + fatKcal + carbKcal - (loss?.calories ?? 0)) <= 4);
+
+  const gain = calculateTargets({
+    currentWeightLbs: 180,
+    currentBodyFat: 20,
+    goalWeightLbs: 200,
+    activity: "light",
+  });
+  assert.ok((gain?.calories ?? 0) > (gain?.tdee ?? 0));
+  assert.equal(parseMeal("snack"), "snack");
+  assert.equal(parseMeal("brunch"), null);
+});
+
+test("macro goals count a close day and miss a low-protein day", () => {
+  const goals = { calorieGoal: 2000, proteinGoal: 150, carbGoal: 200, fatGoal: 60 };
+  assert.deepEqual(macroGoalScore({ calories: 2000, protein: 150, carbs: 200, fat: 60 }, goals), {
+    hit: 4,
+    checked: 4,
+  });
+  assert.equal(macroGoalScore({ calories: 2000, protein: 100, carbs: 200, fat: 60 }, goals)?.hit, 3);
+  assert.equal(macroGoalScore({ calories: 0, protein: 0, carbs: 0, fat: 0 }, { calorieGoal: null, proteinGoal: null, carbGoal: null, fatGoal: null }), null);
 });
 
 test("food phrases parse quantity and cooked name", () => {

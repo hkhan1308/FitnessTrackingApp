@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { num } from "@/lib/format";
+import { parseMeal } from "@/lib/meals";
 import { addFoodLog, getFoodLog, rememberFood, requireDate, totalsFor } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -20,6 +21,10 @@ export async function POST(request: Request) {
   if (!body) return NextResponse.json({ error: "Missing meal." }, { status: 400 });
   try {
     const date = requireDate(typeof body.date === "string" ? body.date : null);
+    const meal = parseMeal(body.meal);
+    if (!meal) {
+      return NextResponse.json({ error: "Choose breakfast, lunch, dinner, or a snack." }, { status: 400 });
+    }
     let foodId = typeof body.foodId === "string" ? body.foodId : null;
     const source = typeof body.source === "string" ? body.source : "manual";
     if (body.saveToLibrary && typeof body.name === "string") {
@@ -46,6 +51,7 @@ export async function POST(request: Request) {
       fat: num(body.fat),
       source,
       foodId,
+      meal,
     });
     return NextResponse.json(item);
   } catch (error) {

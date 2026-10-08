@@ -7,6 +7,7 @@ import { formatPretty } from "@/lib/dates";
 import { fmt } from "@/lib/format";
 import { goalProgress, remainingLabel } from "@/lib/goals";
 import { getHome } from "@/lib/store";
+import { displayText, toDisplayWeight, weightUnit } from "@/lib/units";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +19,10 @@ export default async function HomePage({
   const params = await searchParams;
   const days = params.days === "90" ? 90 : 30;
   const home = await getHome(days);
+  const units = home.profile.units;
+  const weightLabel = weightUnit(units);
   const currentWeight = home.latestWeight?.weightLbs ?? home.profile.currentWeightLbs;
-  const startWeight = home.earliestWeight?.weightLbs ?? home.profile.currentWeightLbs;
+  const startWeight = home.profile.startingWeightLbs ?? home.earliestWeight?.weightLbs ?? home.profile.currentWeightLbs;
   const currentFat = home.latestFat?.bodyFatPct ?? home.profile.startingBodyFat;
   const startFat = home.profile.startingBodyFat ?? home.earliestFat?.bodyFatPct ?? null;
   const weightGoal = goalProgress(startWeight, currentWeight, home.profile.goalWeightLbs);
@@ -35,14 +38,14 @@ export default async function HomePage({
       <div className="grid grid-cols-2 gap-3">
         <GoalCard
           title="Weight"
-          value={currentWeight == null ? "—" : `${fmt(currentWeight, 1)} lb`}
+          value={currentWeight == null ? "—" : `${displayText(toDisplayWeight(currentWeight, units))} ${weightLabel}`}
           detail={
             weightGoal
-              ? remainingLabel(weightGoal.remaining, "lb")
+              ? remainingLabel(toDisplayWeight(weightGoal.remaining, units) ?? 0, weightLabel)
               : "Set a goal weight"
           }
           percent={weightGoal?.percent ?? 0}
-          extra={home.latestWeight?.weightAvg == null ? null : `7-day avg ${fmt(home.latestWeight.weightAvg, 1)} lb`}
+          extra={home.latestWeight?.weightAvg == null ? null : `7-day avg ${displayText(toDisplayWeight(home.latestWeight.weightAvg, units))} ${weightLabel}`}
         />
         <GoalCard
           title="Body fat"
@@ -90,11 +93,11 @@ export default async function HomePage({
             <Link href="/?days=90" className={buttonVariants({ variant: days === 90 ? "default" : "outline", size: "sm" })}>90 days</Link>
           </div>
           <TrendChart
-            unit="lb"
+            unit={weightLabel}
             points={home.series.map((point) => ({
               date: point.date,
-              value: point.weightLbs,
-              avg: point.weightAvg,
+              value: toDisplayWeight(point.weightLbs, units),
+              avg: toDisplayWeight(point.weightAvg, units),
             }))}
           />
         </CardContent>
