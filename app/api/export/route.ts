@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { csvCell } from "@/lib/format";
+import { encodeMeal } from "@/lib/meals";
 import { exportData } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -160,7 +161,7 @@ export async function GET(request: Request) {
         "",
         item.source,
         "",
-        item.meal ?? "",
+        encodeMeal(item.meal, item.occasion) ?? "",
         "",
         "",
         "",

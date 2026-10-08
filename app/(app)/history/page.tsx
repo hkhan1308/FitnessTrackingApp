@@ -102,7 +102,7 @@ async function DayView({ date }: { date: string }) {
           <ul className="mt-3 space-y-2 text-sm">
             {day.foods.map((item) => (
               <li key={item.id} className="flex justify-between gap-3">
-                <span>{item.meal ? `${item.meal === "snack" ? "Snack" : mealLabel(item.meal)} · ` : ""}{item.name}</span>
+                <span>{item.meal ? `${mealLabel(item.meal, item.occasion)} · ` : ""}{item.name}</span>
                 <span className="tabular-nums text-muted-foreground">
                   {fmt(item.protein, 0)}p · {fmtInt(item.calories)}
                 </span>

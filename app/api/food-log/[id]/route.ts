@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { num } from "@/lib/format";
-import { parseMeal } from "@/lib/meals";
+import { parseMeal, snackOccasion } from "@/lib/meals";
 import { deleteFoodLog, updateFoodLog } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -24,6 +24,7 @@ export async function PATCH(
       carbs: num(body.carbs),
       fat: num(body.fat),
       meal: parseMeal(body.meal),
+      occasion: parseMeal(body.meal) === "snack" ? snackOccasion(body.occasion ?? body.meal) : null,
     });
     return NextResponse.json({ ok: true });
   } catch (error) {

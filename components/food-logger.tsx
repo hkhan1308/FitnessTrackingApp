@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api } from "@/lib/client";
 import { fmt, fmtInt, fmtQty } from "@/lib/format";
-import { MEAL_SLOTS, type MealSlot } from "@/lib/meals";
+import { MEAL_SLOTS, snackOccasion, snackTitle, type MealSlot } from "@/lib/meals";
 import type { FoodLogItem, MacroTotals, Profile } from "@/lib/store";
 import { MacroBars } from "@/components/macro-bars";
 import { Button } from "@/components/ui/button";
@@ -63,11 +63,43 @@ export function FoodLogger({
 }) {
   const router = useRouter();
   const [meal, setMeal] = useState<MealSlot | null>(null);
+  const [snackIndex, setSnackIndex] = useState(1);
+  const [draftSnacks, setDraftSnacks] = useState<number[]>([]);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [manual, setManual] = useState(false);
   const [editing, setEditing] = useState<FoodLogItem | null>(null);
+
+  const loggedSnackOccasions = items
+    .filter((item) => item.meal === "snack")
+    .map((item) => item.occasion ?? 1);
+  const snackOccasions = uniqueOccasions([
+    1,
+    ...loggedSnackOccasions,
+    ...draftSnacks,
+    ...(meal === "snack" ? [snackIndex] : []),
+  ]);
+
+  function openSnack(index: number) {
+    setMeal("snack");
+    setSnackIndex(index);
+    setDraftSnacks((current) => (current.includes(index) ? current : [...current, index]));
+  }
+
+  function chooseMeal(slot: MealSlot) {
+    if (slot !== "snack") {
+      setMeal(slot);
+      return;
+    }
+    if (meal === "snack") return;
+    openSnack(uniqueOccasions(loggedSnackOccasions)[0] ?? 1);
+  }
+
+  function addAnotherSnack() {
+    const next = Math.max(1, ...loggedSnackOccasions, ...draftSnacks, meal === "snack" ? snackIndex : 1) + 1;
+    openSnack(next);
+  }
 
   function requireMeal(): MealSlot | null {
     if (meal) return meal;
@@ -113,6 +145,7 @@ export function FoodLogger({
           source: match.source,
           foodId: match.foodId,
           meal,
+          occasion: meal === "snack" ? snackIndex : null,
           saveToLibrary,
           caloriesPer100g: match.caloriesPer100g,
           proteinPer100g: match.proteinPer100g,
@@ -135,7 +168,7 @@ export function FoodLogger({
     try {
       await api("/api/food-log/copy", {
         method: "POST",
-        body: JSON.stringify({ id, date, meal }),
+        body: JSON.stringify({ id, date, meal, occasion: meal === "snack" ? snackIndex : null }),
       });
       toast.success("Meal logged.");
       router.refresh();
@@ -171,12 +204,20 @@ export function FoodLogger({
             type="button"
             variant={meal === slot.id ? "default" : "outline"}
             className="h-11"
-            onClick={() => setMeal(slot.id)}
+            onClick={() => chooseMeal(slot.id)}
           >
-            {slot.id === "snack" ? "Snack" : slot.label}
+            {slot.label}
           </Button>
         ))}
+        <Button type="button" variant="outline" className="col-span-2 h-11" onClick={addAnotherSnack}>
+          Another snack
+        </Button>
       </div>
+      {meal ? (
+        <p className="text-sm text-muted-foreground">
+          Adding to {meal === "snack" ? snackTitle(snackIndex) : MEAL_SLOTS.find((slot) => slot.id === meal)?.label}.
+        </p>
+      ) : null}
       <form method="post" onSubmit={search} className="flex gap-2">
         <Input
           value={query}
@@ -251,6 +292,7 @@ export function FoodLogger({
         <ManualForm
           date={date}
           meal={meal}
+          occasion={meal === "snack" ? snackIndex : null}
           initialName={result?.parsed.name || query}
           onDone={() => {
             setManual(false);
@@ -262,11 +304,27 @@ export function FoodLogger({
       ) : null}
 
       <section className="space-y-4">
-        {MEAL_SLOTS.map((slot) => (
+        {MEAL_SLOTS.filter((slot) => slot.id !== "snack").map((slot) => (
           <MealSection
             key={slot.id}
+            meal={slot.id}
             title={slot.label}
             items={items.filter((item) => item.meal === slot.id)}
+            active={meal === slot.id}
+            onSelect={() => chooseMeal(slot.id)}
+            onEdit={setEditing}
+            onRemove={remove}
+          />
+        ))}
+        {snackOccasions.map((occasion) => (
+          <MealSection
+            key={`snack-${occasion}`}
+            meal="snack"
+            occasion={occasion}
+            title={snackTitle(occasion)}
+            items={items.filter((item) => item.meal === "snack" && (item.occasion ?? 1) === occasion)}
+            active={meal === "snack" && snackIndex === occasion}
+            onSelect={() => openSnack(occasion)}
             onEdit={setEditing}
             onRemove={remove}
           />
@@ -299,27 +357,55 @@ export function FoodLogger({
         </section>
       ) : null}
 
-      <EditDialog item={editing} onClose={() => setEditing(null)} onSaved={() => router.refresh()} />
+      <EditDialog
+        item={editing}
+        snackOccasions={snackOccasions}
+        onClose={() => setEditing(null)}
+        onSaved={() => router.refresh()}
+      />
     </div>
   );
 }
 
+function uniqueOccasions(values: number[]): number[] {
+  return [...new Set(values.filter((value) => Number.isFinite(value) && value >= 1))].sort((a, b) => a - b);
+}
+
 function MealSection({
+  meal,
+  occasion,
   title,
   hint,
   items,
+  active,
+  onSelect,
   onEdit,
   onRemove,
 }: {
+  meal?: string;
+  occasion?: number;
   title: string;
   hint?: string;
   items: FoodLogItem[];
+  active?: boolean;
+  onSelect?: () => void;
   onEdit: (item: FoodLogItem) => void;
   onRemove: (id: string) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <h2 className="text-sm font-medium">{title}</h2>
+    <div
+      data-meal={meal}
+      data-occasion={occasion}
+      className={`space-y-2 rounded-xl p-2 ${active ? "bg-muted" : ""}`}
+    >
+      {onSelect ? (
+        <button type="button" onClick={onSelect} className="text-left text-sm font-medium">
+          {title}
+          {active ? <span className="ml-2 text-xs font-normal text-muted-foreground">Adding here</span> : null}
+        </button>
+      ) : (
+        <h2 className="text-sm font-medium">{title}</h2>
+      )}
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing in this meal yet.</p>
@@ -356,11 +442,13 @@ function labelFor(source: string): string {
 function ManualForm({
   date,
   meal,
+  occasion,
   initialName,
   onDone,
 }: {
   date: string;
   meal: MealSlot | null;
+  occasion: number | null;
   initialName: string;
   onDone: () => void;
 }) {
@@ -380,7 +468,7 @@ function ManualForm({
     }
     setSaving(true);
     try {
-      const meal = {
+      const macros = {
         calories: Number(calories),
         protein: Number(protein),
         carbs: Number(carbs),
@@ -394,14 +482,15 @@ function ManualForm({
           quantity: 1,
           unit: "serving",
           grams: null,
-          ...meal,
+          ...macros,
           source: "manual",
           meal,
+          occasion: meal === "snack" ? occasion : null,
           saveToLibrary: remember,
-          caloriesPer100g: meal.calories,
-          proteinPer100g: meal.protein,
-          carbsPer100g: meal.carbs,
-          fatPer100g: meal.fat,
+          caloriesPer100g: macros.calories,
+          proteinPer100g: macros.protein,
+          carbsPer100g: macros.carbs,
+          fatPer100g: macros.fat,
         }),
       });
       toast.success(remember ? "Saved, and remembered for next time." : "Meal added.");
@@ -462,26 +551,39 @@ function NumberField({
 
 function EditDialog({
   item,
+  snackOccasions,
   onClose,
   onSaved,
 }: {
   item: FoodLogItem | null;
+  snackOccasions: number[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   return (
     <Dialog open={item != null} onOpenChange={(open) => { if (!open) onClose(); }}>
-      {item ? <EditForm key={item.id} item={item} onClose={onClose} onSaved={onSaved} /> : null}
+      {item ? (
+        <EditForm key={item.id} item={item} snackOccasions={snackOccasions} onClose={onClose} onSaved={onSaved} />
+      ) : null}
     </Dialog>
   );
 }
 
+function placementValue(meal: MealSlot | null, occasion: number | null): string {
+  if (!meal) return "";
+  if (meal !== "snack") return meal;
+  const index = occasion ?? 1;
+  return index > 1 ? `snack:${index}` : "snack";
+}
+
 function EditForm({
   item,
+  snackOccasions,
   onClose,
   onSaved,
 }: {
   item: FoodLogItem;
+  snackOccasions: number[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -490,7 +592,12 @@ function EditForm({
   const [protein, setProtein] = useState(item.protein == null ? "" : String(item.protein));
   const [carbs, setCarbs] = useState(item.carbs == null ? "" : String(item.carbs));
   const [fat, setFat] = useState(item.fat == null ? "" : String(item.fat));
-  const [meal, setMeal] = useState<MealSlot | "">(item.meal ?? "");
+  const [placement, setPlacement] = useState(placementValue(item.meal, item.occasion));
+  const snackChoices = uniqueOccasions([
+    ...snackOccasions,
+    item.meal === "snack" ? item.occasion ?? 1 : 1,
+    Math.max(1, ...snackOccasions, item.occasion ?? 1) + 1,
+  ]);
 
   async function save() {
     try {
@@ -504,7 +611,8 @@ function EditForm({
           protein: Number(protein),
           carbs: Number(carbs),
           fat: Number(fat),
-          meal: meal || null,
+          meal: placement || null,
+          occasion: placement.startsWith("snack") ? snackOccasion(placement) : null,
         }),
       });
       toast.success("Meal updated.");
@@ -524,13 +632,16 @@ function EditForm({
         <Input value={name} onChange={(event) => setName(event.target.value)} className="h-11" />
         <select
           aria-label="Meal"
-          value={meal}
-          onChange={(event) => setMeal(event.target.value as MealSlot | "")}
+          value={placement}
+          onChange={(event) => setPlacement(event.target.value)}
           className="h-11 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
         >
           <option value="">Earlier entry</option>
-          {MEAL_SLOTS.map((slot) => (
-            <option key={slot.id} value={slot.id}>{slot.id === "snack" ? "Snack" : slot.label}</option>
+          {MEAL_SLOTS.filter((slot) => slot.id !== "snack").map((slot) => (
+            <option key={slot.id} value={slot.id}>{slot.label}</option>
+          ))}
+          {snackChoices.map((occasion) => (
+            <option key={occasion} value={placementValue("snack", occasion)}>{snackTitle(occasion)}</option>
           ))}
         </select>
         <div className="grid grid-cols-2 gap-2">

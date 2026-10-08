@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { num } from "@/lib/format";
-import { parseMeal } from "@/lib/meals";
+import { parseMeal, snackOccasion } from "@/lib/meals";
 import { addFoodLog, getFoodLog, rememberFood, requireDate, totalsFor } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       source,
       foodId,
       meal,
+      occasion: meal === "snack" ? snackOccasion(body.occasion) : null,
     });
     return NextResponse.json(item);
   } catch (error) {

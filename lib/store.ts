@@ -14,7 +14,7 @@ import {
 import { rankFoods } from "@/lib/food-match";
 import { macrosForGrams, resolvePortion } from "@/lib/food-portion";
 import { parseFoodQuery } from "@/lib/food-parse";
-import { parseMeal, type MealSlot } from "@/lib/meals";
+import { encodeMeal, parseMeal, snackOccasion, type MealSlot } from "@/lib/meals";
 import { rollingAverages } from "@/lib/moving-average";
 import { isActivity, type ActivityLevel } from "@/lib/targets";
 import { num } from "@/lib/format";
@@ -129,6 +129,7 @@ export type FoodLogItem = {
   source: string;
   foodId: string | null;
   meal: MealSlot | null;
+  occasion: number | null;
   createdAt: string;
 };
 
@@ -552,6 +553,7 @@ function mapLog(row: Record<string, unknown>): FoodLogItem {
     source: String(row.source),
     foodId: asText(row.food_id),
     meal: parseMeal(row.meal),
+    occasion: parseMeal(row.meal) === "snack" ? snackOccasion(row.meal) : null,
     createdAt: String(row.created_at),
   };
 }
@@ -620,15 +622,22 @@ export async function addFoodLog(input: Omit<FoodLogItem, "id" | "createdAt">): 
       input.source,
       input.foodId,
       createdAt,
-      parseMeal(input.meal),
+      encodeMeal(parseMeal(input.meal), input.occasion),
     ],
   });
-  return { ...input, id, name: input.name.trim(), createdAt };
+  return {
+    ...input,
+    id,
+    name: input.name.trim(),
+    meal: parseMeal(input.meal),
+    occasion: parseMeal(input.meal) === "snack" ? snackOccasion(input.occasion) : null,
+    createdAt,
+  };
 }
 
 export async function updateFoodLog(
   id: string,
-  input: Pick<FoodLogItem, "name" | "quantity" | "unit" | "calories" | "protein" | "carbs" | "fat" | "meal">,
+  input: Pick<FoodLogItem, "name" | "quantity" | "unit" | "calories" | "protein" | "carbs" | "fat" | "meal" | "occasion">,
 ): Promise<void> {
   await ready();
   await db().execute({
@@ -641,7 +650,7 @@ export async function updateFoodLog(
       input.protein,
       input.carbs,
       input.fat,
-      parseMeal(input.meal),
+      encodeMeal(parseMeal(input.meal), input.occasion),
       id,
     ],
   });
@@ -874,7 +883,7 @@ export async function importData(payload: unknown) {
         item.source || "import",
         item.foodId,
         item.createdAt || new Date().toISOString(),
-        parseMeal(item.meal),
+        encodeMeal(parseMeal(item.meal), item.occasion ?? null),
       ],
     });
   }

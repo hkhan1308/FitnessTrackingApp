@@ -9,7 +9,7 @@ import { goalProgress, remainingLabel } from "./goals.ts";
 import { rollingAverages } from "./moving-average.ts";
 import { calculateTargets, goalBodyFatPercent, macroGoalScore } from "./targets.ts";
 import { fromDisplayLength, fromDisplayWeight, round1, toDisplayLength, toDisplayWeight } from "./units.ts";
-import { parseMeal } from "./meals.ts";
+import { encodeMeal, parseMeal, snackOccasion, snackTitle } from "./meals.ts";
 
 test("week starts Monday and ends Sunday", () => {
   assert.equal(startOfWeek("2026-10-06"), "2026-10-05");
@@ -114,7 +114,14 @@ test("calorie targets use lean mass, a modest adjustment, and the macro split", 
   });
   assert.ok((gain?.calories ?? 0) > (gain?.tdee ?? 0));
   assert.equal(parseMeal("snack"), "snack");
+  assert.equal(parseMeal("snack:2"), "snack");
   assert.equal(parseMeal("brunch"), null);
+  assert.equal(encodeMeal("snack", 1), "snack");
+  assert.equal(encodeMeal("snack", 2), "snack:2");
+  assert.equal(encodeMeal("lunch", 4), "lunch");
+  assert.equal(snackOccasion("snack:3"), 3);
+  assert.equal(snackTitle(1), "Snack");
+  assert.equal(snackTitle(2), "Snack 2");
 });
 
 test("macro goals count a close day and miss a low-protein day", () => {
