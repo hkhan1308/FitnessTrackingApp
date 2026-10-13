@@ -1,0 +1,34 @@
+---
+description: Fit Log project rules for every session
+alwaysApply: true
+---
+
+You are working on Fit Log, a personal fitness and nutrition tracker.
+Stack: Next.js 16 App Router, React 19, TypeScript, Tailwind 4, shadcn/ui,
+Recharts, Turso via @libsql/client. Deployed on Vercel. Single passcode auth.
+
+Source of truth documents: docs/project-spec.md and docs/ai-plan.md.
+
+Hard rules:
+- Do not change these formulas unless a phase explicitly says so:
+  Katch-McArdle BMR (370 + 21.6 x lean kg), activity x1.375 default,
+  15% deficit / 10% surplus, calories never below BMR,
+  protein 1.8 g/kg of goal weight, fat 27.5% of calories, carbs remainder,
+  U.S. Navy body-fat formulas, macro "hit" rule (calories, carbs, fat within
+  10%; protein at least 90%).
+- food_log rows store a macro snapshot at log time. Never recompute old
+  rows from the foods table. Editing a food must not rewrite history.
+- All SQL is parameterized. No string-built SQL with user input.
+- Stored body measurements stay in pounds and inches.
+- Dates are YYYY-MM-DD. Default timezone America/Los_Angeles.
+- Do not add dependencies other than the ones a phase names.
+- Do not touch the AI features in docs/ai-plan.md unless a phase says so.
+- Keep diffs small and focused on the current phase. No drive-by refactors,
+  no renaming of routes, no UI redesigns.
+- Never run migrations or destructive SQL against the production Turso
+  database. Use a dev Turso database or an in-memory libsql client in tests.
+
+Before finishing any phase:
+- Run: npx tsc --noEmit, npm run lint, npm test (once tests exist).
+- Report: files changed, what changed and why, anything you were unsure
+  about, and anything you chose not to do. Then STOP and wait.
