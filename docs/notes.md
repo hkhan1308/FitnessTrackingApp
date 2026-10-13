@@ -1,4 +1,4 @@
-- [ ] Docs branch — [Add project docs](bc-d655ff6c-61e8-5e0c-9715-6fcd075c17c1) is adding the spec, AI plan, notes, and cursor plan on `docs/project-files`. Not merging to `main`.
+- [ ] Docs branch — [Add project docs](bc-d655ff6c-61e8-5e0c-9715-6fcd075c17c1) is merging `docs/project-files` into `main`.
 - [ ] [Local AI plan](/cursor/stores/self/docs/ai-plan.md) — local Qwen model, one food-search tool, no RAG. Waiting on approval before building.
 - [ ] Fitness app — unit choice, calculated goals, separate snack times, and charts are on [Fit Log](http://127.0.0.1:3847).
 - [x] [Project spec](/cursor/stores/self/docs/project-spec.md) — aims, objectives, stack, and current requirements written.
