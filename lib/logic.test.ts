@@ -1,26 +1,25 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { estimateBodyFat } from "./body-fat.ts";
-import { addDays, endOfWeek, startOfWeek, todayISO } from "./dates.ts";
-import { rankFoods } from "./food-match.ts";
-import { parseFoodQuery } from "./food-parse.ts";
-import { macrosForGrams, resolvePortion } from "./food-portion.ts";
-import { goalProgress, remainingLabel } from "./goals.ts";
-import { rollingAverages } from "./moving-average.ts";
-import { calculateTargets, goalBodyFatPercent, macroGoalScore } from "./targets.ts";
-import { fromDisplayLength, fromDisplayWeight, round1, toDisplayLength, toDisplayWeight } from "./units.ts";
-import { encodeMeal, parseMeal, snackOccasion, snackTitle } from "./meals.ts";
+import { expect, test } from "vitest";
+import { estimateBodyFat } from "./body-fat";
+import { addDays, endOfWeek, startOfWeek, todayISO } from "./dates";
+import { rankFoods } from "./food-match";
+import { parseFoodQuery } from "./food-parse";
+import { macrosForGrams, resolvePortion } from "./food-portion";
+import { goalProgress, remainingLabel } from "./goals";
+import { rollingAverages } from "./moving-average";
+import { calculateTargets, goalBodyFatPercent, macroGoalScore } from "./targets";
+import { fromDisplayLength, fromDisplayWeight, round1, toDisplayLength, toDisplayWeight } from "./units";
+import { encodeMeal, parseMeal, snackOccasion, snackTitle } from "./meals";
 
 test("week starts Monday and ends Sunday", () => {
-  assert.equal(startOfWeek("2026-10-06"), "2026-10-05");
-  assert.equal(endOfWeek("2026-10-06"), "2026-10-11");
-  assert.equal(startOfWeek("2026-10-11"), "2026-10-05");
-  assert.equal(addDays("2026-10-06", 1), "2026-10-07");
+  expect(startOfWeek("2026-10-06")).toBe("2026-10-05");
+  expect(endOfWeek("2026-10-06")).toBe("2026-10-11");
+  expect(startOfWeek("2026-10-11")).toBe("2026-10-05");
+  expect(addDays("2026-10-06", 1)).toBe("2026-10-07");
 });
 
 test("today is a Los Angeles calendar date", () => {
-  assert.match(todayISO(new Date("2026-10-07T06:30:00Z")), /^\d{4}-\d{2}-\d{2}$/);
-  assert.equal(todayISO(new Date("2026-10-07T06:30:00Z")), "2026-10-06");
+  expect(todayISO(new Date("2026-10-07T06:30:00Z"))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(todayISO(new Date("2026-10-07T06:30:00Z"))).toBe("2026-10-06");
 });
 
 test("navy body fat formulas", () => {
@@ -31,7 +30,7 @@ test("navy body fat formulas", () => {
     neckInches: 16,
     hipInches: null,
   });
-  assert.ok(male != null && Math.abs(male - 19.4) < 0.2);
+  expect(male != null && Math.abs(male - 19.4) < 0.2).toBe(true);
 
   const female = estimateBodyFat({
     sex: "female",
@@ -40,8 +39,8 @@ test("navy body fat formulas", () => {
     neckInches: 13,
     hipInches: 38,
   });
-  assert.ok(female != null && female > 20 && female < 40);
-  assert.equal(
+  expect(female != null && female > 20 && female < 40).toBe(true);
+  expect(
     estimateBodyFat({
       sex: "female",
       heightInches: 64,
@@ -49,43 +48,42 @@ test("navy body fat formulas", () => {
       neckInches: 13,
       hipInches: null,
     }),
-    null,
-  );
+  ).toBe(null);
 });
 
 test("moving average uses however many days exist", () => {
-  assert.deepEqual(rollingAverages([10, null, 12], 7), [10, null, 11]);
+  expect(rollingAverages([10, null, 12], 7)).toEqual([10, null, 11]);
   const series = [1, 2, 3, 4, 5, 6, 7, 8];
   const averages = rollingAverages(series, 7);
-  assert.equal(averages[6], 4);
-  assert.equal(averages[7], 5);
+  expect(averages[6]).toBe(4);
+  expect(averages[7]).toBe(5);
 });
 
 test("goal remaining works for loss and gain", () => {
   const loss = goalProgress(200, 190, 180);
-  assert.equal(loss?.percent, 50);
-  assert.equal(remainingLabel(loss!.remaining, "lb"), "10.0 lb to go");
+  expect(loss?.percent).toBe(50);
+  expect(remainingLabel(loss!.remaining, "lb")).toBe("10.0 lb to go");
   const gain = goalProgress(150, 160, 170);
-  assert.equal(gain?.percent, 50);
-  assert.equal(remainingLabel(-4.2, "lb"), "4.2 lb to go");
+  expect(gain?.percent).toBe(50);
+  expect(remainingLabel(-4.2, "lb")).toBe("4.2 lb to go");
 });
 
 test("unit switch keeps a stored pound value readable", () => {
   const stored = 188.4;
   const shown = round1(toDisplayWeight(stored, "metric") ?? 0);
   const back = fromDisplayWeight(shown, "metric");
-  assert.ok(back != null && Math.abs(back - stored) < 0.15);
-  assert.equal(fromDisplayWeight(180, "us"), 180);
+  expect(back != null && Math.abs(back - stored) < 0.15).toBe(true);
+  expect(fromDisplayWeight(180, "us")).toBe(180);
   const waist = fromDisplayLength(round1(toDisplayLength(36, "metric") ?? 0), "metric");
-  assert.ok(waist != null && Math.abs(waist - 36) < 0.05);
+  expect(waist != null && Math.abs(waist - 36) < 0.05).toBe(true);
 });
 
 test("goal body fat holds lean mass for loss and gain", () => {
   const loss = goalBodyFatPercent(180, 20, 165);
-  assert.equal(loss, 12.7);
+  expect(loss).toBe(12.7);
   const gain = goalBodyFatPercent(180, 20, 200);
-  assert.equal(gain, 28);
-  assert.equal(goalBodyFatPercent(180, 20, 140), null);
+  expect(gain).toBe(28);
+  expect(goalBodyFatPercent(180, 20, 140)).toBe(null);
 });
 
 test("calorie targets use lean mass, a modest adjustment, and the macro split", () => {
@@ -95,16 +93,16 @@ test("calorie targets use lean mass, a modest adjustment, and the macro split", 
     goalWeightLbs: 165,
     activity: "light",
   });
-  assert.ok(loss);
-  assert.equal(loss?.goalBodyFat, 12.7);
-  assert.ok((loss?.calories ?? 0) < (loss?.tdee ?? 0));
-  assert.ok((loss?.calories ?? 0) >= (loss?.bmr ?? 0));
-  assert.equal(loss?.protein, Math.round((165 / 2.2046226218) * 1.8));
+  expect(loss).toBeTruthy();
+  expect(loss?.goalBodyFat).toBe(12.7);
+  expect((loss?.calories ?? 0) < (loss?.tdee ?? 0)).toBe(true);
+  expect((loss?.calories ?? 0) >= (loss?.bmr ?? 0)).toBe(true);
+  expect(loss?.protein).toBe(Math.round((165 / 2.2046226218) * 1.8));
   const proteinKcal = (loss?.protein ?? 0) * 4;
   const fatKcal = (loss?.fat ?? 0) * 9;
   const carbKcal = (loss?.carbs ?? 0) * 4;
-  assert.ok(Math.abs(fatKcal / (loss?.calories ?? 1) - 0.275) < 0.05);
-  assert.ok(Math.abs(proteinKcal + fatKcal + carbKcal - (loss?.calories ?? 0)) <= 4);
+  expect(Math.abs(fatKcal / (loss?.calories ?? 1) - 0.275) < 0.05).toBe(true);
+  expect(Math.abs(proteinKcal + fatKcal + carbKcal - (loss?.calories ?? 0)) <= 4).toBe(true);
 
   const gain = calculateTargets({
     currentWeightLbs: 180,
@@ -112,37 +110,37 @@ test("calorie targets use lean mass, a modest adjustment, and the macro split", 
     goalWeightLbs: 200,
     activity: "light",
   });
-  assert.ok((gain?.calories ?? 0) > (gain?.tdee ?? 0));
-  assert.equal(parseMeal("snack"), "snack");
-  assert.equal(parseMeal("snack:2"), "snack");
-  assert.equal(parseMeal("brunch"), null);
-  assert.equal(encodeMeal("snack", 1), "snack");
-  assert.equal(encodeMeal("snack", 2), "snack:2");
-  assert.equal(encodeMeal("lunch", 4), "lunch");
-  assert.equal(snackOccasion("snack:3"), 3);
-  assert.equal(snackTitle(1), "Snack");
-  assert.equal(snackTitle(2), "Snack 2");
+  expect((gain?.calories ?? 0) > (gain?.tdee ?? 0)).toBe(true);
+  expect(parseMeal("snack")).toBe("snack");
+  expect(parseMeal("snack:2")).toBe("snack");
+  expect(parseMeal("brunch")).toBe(null);
+  expect(encodeMeal("snack", 1)).toBe("snack");
+  expect(encodeMeal("snack", 2)).toBe("snack:2");
+  expect(encodeMeal("lunch", 4)).toBe("lunch");
+  expect(snackOccasion("snack:3")).toBe(3);
+  expect(snackTitle(1)).toBe("Snack");
+  expect(snackTitle(2)).toBe("Snack 2");
 });
 
 test("macro goals count a close day and miss a low-protein day", () => {
   const goals = { calorieGoal: 2000, proteinGoal: 150, carbGoal: 200, fatGoal: 60 };
-  assert.deepEqual(macroGoalScore({ calories: 2000, protein: 150, carbs: 200, fat: 60 }, goals), {
+  expect(macroGoalScore({ calories: 2000, protein: 150, carbs: 200, fat: 60 }, goals)).toEqual({
     hit: 4,
     checked: 4,
   });
-  assert.equal(macroGoalScore({ calories: 2000, protein: 100, carbs: 200, fat: 60 }, goals)?.hit, 3);
-  assert.equal(macroGoalScore({ calories: 0, protein: 0, carbs: 0, fat: 0 }, { calorieGoal: null, proteinGoal: null, carbGoal: null, fatGoal: null }), null);
+  expect(macroGoalScore({ calories: 2000, protein: 100, carbs: 200, fat: 60 }, goals)?.hit).toBe(3);
+  expect(macroGoalScore({ calories: 0, protein: 0, carbs: 0, fat: 0 }, { calorieGoal: null, proteinGoal: null, carbGoal: null, fatGoal: null })).toBe(null);
 });
 
 test("food phrases parse quantity and cooked name", () => {
-  assert.deepEqual(parseFoodQuery("100g chicken mince"), {
+  expect(parseFoodQuery("100g chicken mince")).toEqual({
     quantity: 100,
     unit: "g",
     name: "chicken mince",
     raw: "100g chicken mince",
     hasQuantity: true,
   });
-  assert.deepEqual(parseFoodQuery("1.5 scoops whey protein"), {
+  expect(parseFoodQuery("1.5 scoops whey protein")).toEqual({
     quantity: 1.5,
     unit: "scoop",
     name: "whey protein",
@@ -150,12 +148,12 @@ test("food phrases parse quantity and cooked name", () => {
     hasQuantity: true,
   });
   const eggs = parseFoodQuery("2 boiled eggs");
-  assert.equal(eggs.quantity, 2);
-  assert.equal(eggs.unit, null);
-  assert.equal(eggs.name, "boiled eggs");
+  expect(eggs.quantity).toBe(2);
+  expect(eggs.unit).toBe(null);
+  expect(eggs.name).toBe("boiled eggs");
   const rice = parseFoodQuery("1 cup white rice");
-  assert.equal(rice.unit, "cup");
-  assert.equal(rice.name, "white rice");
+  expect(rice.unit).toBe("cup");
+  expect(rice.name).toBe("white rice");
 });
 
 test("local match prefers the full dish and skips a weak overlap", () => {
@@ -166,10 +164,10 @@ test("local match prefers the full dish and skips a weak overlap", () => {
     { id: "rice", name: "White rice", aliases: ["steamed rice"] },
   ];
   const biryani = rankFoods(foods, "chicken biryani");
-  assert.equal(biryani[0]?.id, "biryani");
-  assert.equal(rankFoods(foods, "boiled eggs")[0]?.id, "egg");
-  assert.equal(rankFoods(foods, "white rice")[0]?.id, "rice");
-  assert.equal(rankFoods(foods, "zebra cakes").length, 0);
+  expect(biryani[0]?.id).toBe("biryani");
+  expect(rankFoods(foods, "boiled eggs")[0]?.id).toBe("egg");
+  expect(rankFoods(foods, "white rice")[0]?.id).toBe("rice");
+  expect(rankFoods(foods, "zebra cakes").length).toBe(0);
 });
 
 test("portions use cooked unit sizes", () => {
@@ -184,8 +182,8 @@ test("portions use cooked unit sizes", () => {
   };
   const parsed = parseFoodQuery("1 cup white rice");
   const portion = resolvePortion(rice, parsed);
-  assert.equal(portion.grams, 158);
-  assert.equal(macrosForGrams(rice, portion.grams).calories, 205);
+  expect(portion.grams).toBe(158);
+  expect(macrosForGrams(rice, portion.grams).calories).toBe(205);
 
   const eggs = {
     name: "Egg",
@@ -197,6 +195,6 @@ test("portions use cooked unit sizes", () => {
     units: { egg: 50 },
   };
   const eggPortion = resolvePortion(eggs, parseFoodQuery("2 boiled eggs"));
-  assert.equal(eggPortion.unit, "egg");
-  assert.equal(eggPortion.grams, 100);
+  expect(eggPortion.unit).toBe("egg");
+  expect(eggPortion.grams).toBe(100);
 });

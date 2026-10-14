@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3847",
     "lint": "eslint",
-    "test": "vitest run && node --experimental-strip-types --test lib/*.test.ts"
+    "test": "vitest run",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
