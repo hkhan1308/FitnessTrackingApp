@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3847",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test lib/*.test.ts"
+    "test": "vitest run && node --experimental-strip-types --test lib/*.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -32,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
